@@ -1,0 +1,1179 @@
+'use client'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import { Film, Plus, Download, Trash2, Camera, Lightbulb, Image as ImageIcon, MessageCircle, X, Upload, ChevronDown, Sun, Moon, Layers, Volume2, FileText, ArrowLeft, GripVertical, Check, Clock, Play, ChevronLeft, ChevronRight, BarChart2, Send, Smile, Paperclip, Lock, Users, AtSign, Quote } from 'lucide-react'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
+
+type BlockType = 'action' | 'character' | 'dialogue' | 'parenthetical' | 'transition'
+type SceneFace = 0 | 1 | 2 | 3 | 4
+
+interface Block { id: string; type: BlockType; text: string }
+interface Comment { id: string; author: string; text: string; blockId: string }
+interface Shot { id: string; type: string; angle: string; movement: string; description: string; duration: string }
+interface Scene {
+  id: string; heading: string; blocks: Block[]
+  face: SceneFace; imageUrl: string | null
+  shots: Shot[]
+  camera: { angle: string; movement: string; focal: string }
+  lighting: { key: string; fill: string; ambiance: string }
+  sound: { direct: string; music: string; ambiance: string }
+  notes: string
+  comments: Comment[]
+}
+
+const uid = () => Math.random().toString(36).slice(2, 9)
+
+type Theme = 'dark' | 'light'
+const THEME = {
+  dark: { bg: '#080808', fg: '#f0ede8', card: '#0d0d0d', cardHeader: '#131313', border: 'rgba(255,255,255,0.08)', borderSoft: 'rgba(255,255,255,0.06)', header: 'rgba(8,8,8,0.96)', hint: 'rgba(255,255,255,0.04)', hintText: 'rgba(255,255,255,0.2)', hintBold: 'rgba(255,255,255,0.4)', addBtn: 'rgba(255,255,255,0.08)', addBtnText: 'rgba(255,255,255,0.25)', inputColor: '#f0ede8', seqCount: 'rgba(255,255,255,0.22)', divider: 'rgba(255,255,255,0.1)', blockFocus: 'rgba(255,255,255,0.025)', chatBg: '#0a0a0a', chatMsg: 'rgba(255,255,255,0.07)', chatInput: 'rgba(255,255,255,0.06)', chatBorder: 'rgba(255,255,255,0.07)', chatMuted: 'rgba(255,255,255,0.25)', shadow: '0 1px 3px rgba(0,0,0,0.4)' },
+  light: { bg: '#f2ede4', fg: '#1a1510', card: '#ffffff', cardHeader: '#f5f0e8', border: 'rgba(0,0,0,0.13)', borderSoft: 'rgba(0,0,0,0.08)', header: 'rgba(242,237,228,0.96)', hint: 'rgba(0,0,0,0.04)', hintText: 'rgba(0,0,0,0.4)', hintBold: 'rgba(0,0,0,0.6)', addBtn: 'rgba(0,0,0,0.07)', addBtnText: 'rgba(0,0,0,0.45)', inputColor: '#1a1510', seqCount: 'rgba(0,0,0,0.35)', divider: 'rgba(0,0,0,0.15)', blockFocus: 'rgba(0,0,0,0.04)', chatBg: '#faf7f2', chatMsg: 'rgba(0,0,0,0.06)', chatInput: 'rgba(0,0,0,0.05)', chatBorder: 'rgba(0,0,0,0.1)', chatMuted: 'rgba(0,0,0,0.35)', shadow: '0 1px 3px rgba(0,0,0,0.08)' },
+} as const
+
+const BLOCK_CONFIG: Record<BlockType, { label: string; color: string; placeholder: string; style: React.CSSProperties; upper?: boolean; next: BlockType; tab: BlockType }> = {
+  action:      { label: 'Action',      color: '#6b7280', placeholder: "Description de l'action, décor, atmosphère...", style: { color: '#c8c4be' }, next: 'character', tab: 'character' },
+  character:   { label: 'Personnage',  color: '#e8a020', placeholder: 'NOM DU PERSONNAGE', style: { color: '#f0ede8', fontWeight: 800, textAlign: 'center', paddingLeft: '26%', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.8rem' }, upper: true, next: 'dialogue', tab: 'action' },
+  dialogue:    { label: 'Dialogue',    color: '#60a5fa', placeholder: 'Ce que dit le personnage...', style: { color: '#ddd9d3', paddingLeft: '16%', paddingRight: '16%', fontStyle: 'italic' }, next: 'character', tab: 'parenthetical' },
+  parenthetical:{ label: 'Note de jeu',color: '#a78bfa', placeholder: '(en aparté, doucement...)', style: { color: '#9ca3af', paddingLeft: '22%', paddingRight: '22%', fontStyle: 'italic', fontSize: '0.78rem' }, next: 'dialogue', tab: 'dialogue' },
+  transition:  { label: 'Transition',  color: '#34d399', placeholder: 'COUPE SUR :', style: { color: '#9ca3af', fontWeight: 700, textAlign: 'right', textTransform: 'uppercase', fontSize: '0.78rem' }, upper: true, next: 'action', tab: 'action' },
+}
+
+const FACES = [
+  { label: 'Script',     icon: Film,      color: '#e8a020' },
+  { label: 'Storyboard', icon: ImageIcon, color: '#60a5fa' },
+  { label: 'Découpage',  icon: Layers,    color: '#f97316' },
+  { label: 'Son & Lum.', icon: Volume2,   color: '#a78bfa' },
+  { label: 'Notes',      icon: FileText,  color: '#4ade80' },
+]
+const SHOT_TYPES = ["Plan large","Plan d'ensemble","Plan moyen","Plan rapproché épaule","Plan américain","Gros plan","Très gros plan","Plan séquence","Insert"]
+const SHOT_ANGLES = ['Face','Plongée','Contre-plongée','Plongée zénithale','Contre-plongée rasante','Dutch angle']
+const SHOT_MOVES  = ['Fixe','Panoramique H.','Tilt vertical','Travelling avant','Travelling arrière','Travelling latéral','Zoom avant','Zoom arrière','Steadicam','Caméra épaule','Grue / Crane','Drone']
+
+// ─── AutoTextarea ─────────────────────────────────────────────────────
+function AutoTextarea({ value, onChange, placeholder, style, focused, onFocus, onKeyDown, spellCheck = true }: {
+  value: string; onChange: (v: string) => void; placeholder: string
+  style?: React.CSSProperties; focused: boolean; onFocus: () => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
+  spellCheck?: boolean
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => { if (focused && ref.current) ref.current.focus() }, [focused])
+  useEffect(() => {
+    if (ref.current) { ref.current.style.height = 'auto'; ref.current.style.height = ref.current.scrollHeight + 'px' }
+  }, [value])
+  return (
+    <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)}
+      onFocus={onFocus} onKeyDown={onKeyDown} placeholder={placeholder} rows={1}
+      className="w-full bg-transparent resize-none outline-none font-mono text-sm leading-7 placeholder:opacity-20"
+      style={{ minHeight: 28, overflow: 'hidden', ...style }} spellCheck={spellCheck} />
+  )
+}
+
+// ─── TypePicker ───────────────────────────────────────────────────────
+function TypePicker({ current, onChange }: { current: BlockType; onChange: (t: BlockType) => void }) {
+  const [open, setOpen] = useState(false)
+  const cfg = BLOCK_CONFIG[current]
+  return (
+    <div className="relative">
+      <button onMouseDown={e => { e.preventDefault(); setOpen(v => !v) }}
+        className="flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md transition-colors hover:bg-white/5"
+        style={{ color: cfg.color, whiteSpace: 'nowrap' }}>
+        {cfg.label} <ChevronDown size={8} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50 py-1 min-w-[140px]"
+          style={{ background: '#1c1c1c', border: '1px solid rgba(255,255,255,0.1)' }}>
+          {(Object.keys(BLOCK_CONFIG) as BlockType[]).map(t => (
+            <button key={t} onMouseDown={e => { e.preventDefault(); onChange(t); setOpen(false) }}
+              className="w-full text-left px-4 py-2 text-xs transition-colors hover:bg-white/5 flex items-center gap-2"
+              style={{ color: t === current ? BLOCK_CONFIG[t].color : 'rgba(240,237,232,0.55)' }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: BLOCK_CONFIG[t].color }} />
+              {BLOCK_CONFIG[t].label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── FlipTab ──────────────────────────────────────────────────────────
+function FlipTab({ face, onClick }: { face: SceneFace; onClick: () => void }) {
+  const next = ((face + 1) % 5) as SceneFace
+  const cur = FACES[face]; const nxt = FACES[next]
+  const CurIcon = cur.icon; const NxtIcon = nxt.icon
+  return (
+    <button onClick={onClick}
+      className="flex flex-col items-center justify-center gap-4 px-3 py-5 h-full transition-all group"
+      style={{ background: `linear-gradient(180deg, ${cur.color}20 0%, ${cur.color}10 100%)`, borderLeft: `2px solid ${cur.color}50`, minWidth: 64, boxShadow: `inset -4px 0 12px ${cur.color}08` }}
+      title={`Basculer vers ${nxt.label}`}>
+      <div className="flex flex-col items-center gap-2">
+        <CurIcon size={20} style={{ color: cur.color, filter: `drop-shadow(0 0 4px ${cur.color}80)` }} />
+        <span className="text-[10px] font-black tracking-widest" style={{ color: cur.color, writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)' }}>
+          {cur.label.toUpperCase()}
+        </span>
+      </div>
+      <div className="flex flex-col items-center gap-1 transition-transform group-hover:translate-x-0.5">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <path d="M7 4l5 5-5 5" stroke={cur.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="text-[8px] font-semibold opacity-60" style={{ color: cur.color }}>flip</span>
+      </div>
+      <div className="flex flex-col items-center gap-1.5 opacity-40 group-hover:opacity-70 transition-opacity">
+        <NxtIcon size={14} style={{ color: nxt.color }} />
+        <span className="text-[8px] font-bold" style={{ color: nxt.color, writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)' }}>
+          {nxt.label.toUpperCase()}
+        </span>
+      </div>
+    </button>
+  )
+}
+
+// ─── SceneCard ────────────────────────────────────────────────────────
+function SceneCard({ scene, focusedBlockId, theme, dragHandleProps, onHeadingChange, onBlockChange, onBlockType,
+  onBlockDelete, onBlockAdd, onBlockFocus, onFaceChange, onImageDrop, onCameraChange, onLightingChange,
+  onSoundChange, onShotChange, onNotesChange, onDeleteScene, onAddComment
+}: {
+  scene: Scene; focusedBlockId: string | null; theme: Theme
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>
+  onHeadingChange: (v: string) => void; onBlockChange: (id: string, v: string) => void
+  onBlockType: (id: string, t: BlockType) => void; onBlockDelete: (id: string) => void
+  onBlockAdd: (afterId: string) => void; onBlockFocus: (id: string) => void
+  onFaceChange: (f: SceneFace) => void; onImageDrop: (url: string) => void
+  onCameraChange: (k: keyof Scene['camera'], v: string) => void
+  onLightingChange: (k: keyof Scene['lighting'], v: string) => void
+  onSoundChange: (k: keyof Scene['sound'], v: string) => void
+  onShotChange: (shots: Shot[]) => void; onNotesChange: (v: string) => void
+  onDeleteScene: () => void; onAddComment: (blockId: string, text: string) => void
+}) {
+  const T = THEME[theme]
+  const [dragging, setDragging] = useState(false)
+  const [commentBlockId, setCommentBlockId] = useState<string | null>(null)
+  const [commentText, setCommentText] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file?.type.startsWith('image/')) onImageDrop(URL.createObjectURL(file))
+  }
+
+  const handleBlockChange = (id: string, v: string, type: BlockType) => {
+    let out = v
+    if (type === 'dialogue') out = out.replace(/^"/, '« ').replace(/"$/, ' »')
+    if (BLOCK_CONFIG[type].upper) out = out.toUpperCase()
+    onBlockChange(id, out)
+  }
+
+  return (
+    <div className="relative rounded-2xl overflow-hidden mb-5 flex flex-col"
+      style={{ border: `1px solid ${T.border}`, background: T.card }}>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-2.5"
+        style={{ borderBottom: `1px solid ${T.borderSoft}`, background: T.cardHeader }}>
+        {/* Drag handle */}
+        <div {...dragHandleProps} className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-25 hover:opacity-60 transition-opacity touch-none"
+          style={{ color: T.fg }}>
+          <GripVertical size={14} />
+        </div>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded flex-shrink-0"
+          style={{ background: 'rgba(232,160,32,0.1)', color: '#e8a020', border: '1px solid rgba(232,160,32,0.2)' }}>
+          SEQ.
+        </span>
+        <input value={scene.heading} onChange={e => onHeadingChange(e.target.value.toUpperCase())}
+          placeholder="INT. LIEU — JOUR"
+          className="flex-1 bg-transparent outline-none font-mono font-black text-sm uppercase tracking-wider"
+          style={{ color: '#e8a020' }} />
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {([0,1,2,3,4] as SceneFace[]).map(f => (
+            <button key={f} onClick={() => onFaceChange(f)}
+              className="w-2 h-2 rounded-full transition-all hover:scale-125"
+              style={{ background: scene.face === f ? FACES[f].color : T.divider, boxShadow: scene.face === f ? `0 0 6px ${FACES[f].color}` : 'none' }} />
+          ))}
+          <button onClick={onDeleteScene} className="ml-1 opacity-25 hover:opacity-60 transition-opacity" style={{ color: '#f87171' }}>
+            <Trash2 size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex flex-1 min-h-[80px]">
+        <div className="flex-1 min-w-0">
+
+          {/* FACE 0 — Script */}
+          {scene.face === 0 && (
+            <div className="px-2 py-3 space-y-0.5">
+              {scene.blocks.map(block => {
+                const cfg = BLOCK_CONFIG[block.type]
+                const isFocused = focusedBlockId === block.id
+                const hasComments = scene.comments.filter(c => c.blockId === block.id).length > 0
+                return (
+                  <div key={block.id}
+                    className="group relative flex items-start gap-1 px-2 py-0.5 rounded-lg transition-colors"
+                    style={{ background: isFocused ? T.blockFocus : 'transparent' }}>
+                    <div className={`flex-shrink-0 w-20 pt-1.5 transition-opacity ${isFocused ? 'opacity-100' : 'opacity-0 group-hover:opacity-70'}`}>
+                      <TypePicker current={block.type} onChange={t => onBlockType(block.id, t)} />
+                    </div>
+                    <div className="flex-shrink-0 w-0.5 self-stretch rounded-full mt-1 mb-1 transition-opacity"
+                      style={{ background: isFocused ? cfg.color : 'transparent', opacity: 0.6 }} />
+                    <div className="flex-1 min-w-0 px-2">
+                      <AutoTextarea value={block.text}
+                        onChange={v => handleBlockChange(block.id, v, block.type)}
+                        placeholder={cfg.placeholder}
+                        style={{ ...cfg.style, color: theme === 'light' ? T.fg : cfg.style.color }}
+                        focused={isFocused}
+                        spellCheck={!['character','transition'].includes(block.type)}
+                        onFocus={() => onBlockFocus(block.id)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onBlockAdd(block.id) }
+                          else if (e.key === 'Tab') { e.preventDefault(); onBlockType(block.id, cfg.tab) }
+                          else if (e.key === 'Backspace' && block.text === '') { e.preventDefault(); onBlockDelete(block.id) }
+                        }} />
+                    </div>
+                    <div className={`flex-shrink-0 flex items-center gap-1 pt-2 transition-opacity ${isFocused || hasComments ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                      {hasComments && (
+                        <div className="flex -space-x-1 mr-1">
+                          {scene.comments.filter(c => c.blockId === block.id).slice(0,3).map(c => (
+                            <div key={c.id} title={`${c.author}: ${c.text}`}
+                              className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold border"
+                              style={{ background: '#1d4ed8', borderColor: T.card, color: 'white' }}>
+                              {c.author[0].toUpperCase()}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button onClick={() => setCommentBlockId(block.id)} title="Commenter"
+                        className="p-1 rounded transition-colors hover:text-blue-400"
+                        style={{ color: 'rgba(255,255,255,0.25)' }}>
+                        <MessageCircle size={10} />
+                      </button>
+                      <button onClick={() => onBlockDelete(block.id)} title="Supprimer"
+                        className="p-1 rounded transition-colors hover:text-red-400"
+                        style={{ color: 'rgba(255,255,255,0.25)' }}>
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              <button onClick={() => onBlockAdd(scene.blocks[scene.blocks.length - 1]?.id ?? '')}
+                className="ml-24 mt-1 flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors"
+                style={{ color: T.hintText }}>
+                <Plus size={10} /> Ajouter
+              </button>
+            </div>
+          )}
+
+          {/* FACE 1 — Storyboard */}
+          {scene.face === 1 && (
+            <div className="p-4">
+              {scene.imageUrl ? (
+                <div className="relative group rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={scene.imageUrl} alt="storyboard" className="w-full h-full object-cover" />
+                  <button onClick={() => onImageDrop('')}
+                    className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ background: 'rgba(0,0,0,0.75)' }}>
+                    <X size={12} className="text-white" />
+                  </button>
+                </div>
+              ) : (
+                <div onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                  onDragLeave={() => setDragging(false)} onDrop={handleDrop}
+                  onClick={() => fileRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-3 rounded-xl cursor-pointer transition-all"
+                  style={{ aspectRatio: '16/9', border: `2px dashed ${dragging ? '#60a5fa' : T.border}`, background: dragging ? 'rgba(96,165,250,0.05)' : T.hint }}>
+                  <Upload size={22} style={{ color: T.hintText }} />
+                  <p className="text-sm font-medium" style={{ color: T.hintText }}>Glisser une image ici ou cliquer</p>
+                  <p className="text-xs" style={{ color: T.hintText, opacity: 0.7 }}>Photo de repérage · Croquis · Référence visuelle</p>
+                </div>
+              )}
+              <input ref={fileRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) onImageDrop(URL.createObjectURL(f)) }} />
+            </div>
+          )}
+
+          {/* FACE 2 — Découpage */}
+          {scene.face === 2 && (
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-xs font-bold" style={{ color: '#f97316' }}>
+                  <Layers size={12} /> Découpage technique
+                </div>
+                <button onClick={() => onShotChange([...scene.shots, { id: uid(), type: '', angle: '', movement: '', description: '', duration: '' }])}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+                  style={{ background: 'rgba(249,115,22,0.1)', color: '#f97316', border: '1px solid rgba(249,115,22,0.2)' }}>
+                  <Plus size={10} /> Plan
+                </button>
+              </div>
+              {scene.shots.length === 0 ? (
+                <p className="text-xs text-center py-6" style={{ color: T.hintText }}>Aucun plan — cliquez sur + Plan</p>
+              ) : (
+                <div className="space-y-2">
+                  {scene.shots.map((shot, i) => (
+                    <div key={shot.id} className="rounded-xl p-3 space-y-2" style={{ background: T.hint, border: `1px solid ${T.border}` }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded flex-shrink-0"
+                          style={{ background: 'rgba(249,115,22,0.15)', color: '#f97316' }}>P{i+1}</span>
+                        <select value={shot.type} onChange={e => { const s=[...scene.shots]; s[i]={...s[i],type:e.target.value}; onShotChange(s) }}
+                          className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
+                          style={{ background: T.card, border: `1px solid ${T.border}`, color: T.fg }}>
+                          <option value="">Type de plan</option>
+                          {SHOT_TYPES.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <button onClick={() => onShotChange(scene.shots.filter(s => s.id !== shot.id))}
+                          className="opacity-30 hover:opacity-70 transition-opacity" style={{ color: '#f87171' }}>
+                          <X size={12} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <select value={shot.angle} onChange={e => { const s=[...scene.shots]; s[i]={...s[i],angle:e.target.value}; onShotChange(s) }}
+                          className="text-xs px-2 py-1.5 rounded-lg outline-none"
+                          style={{ background: T.card, border: `1px solid ${T.border}`, color: T.fg }}>
+                          <option value="">Angle</option>
+                          {SHOT_ANGLES.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                        <select value={shot.movement} onChange={e => { const s=[...scene.shots]; s[i]={...s[i],movement:e.target.value}; onShotChange(s) }}
+                          className="text-xs px-2 py-1.5 rounded-lg outline-none"
+                          style={{ background: T.card, border: `1px solid ${T.border}`, color: T.fg }}>
+                          <option value="">Mouvement</option>
+                          {SHOT_MOVES.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </div>
+                      <input value={shot.description} onChange={e => { const s=[...scene.shots]; s[i]={...s[i],description:e.target.value}; onShotChange(s) }}
+                        placeholder="Description du plan..." className="w-full text-xs px-2 py-1.5 rounded-lg outline-none"
+                        style={{ background: T.card, border: `1px solid ${T.border}`, color: T.fg }} />
+                      <input value={shot.duration} onChange={e => { const s=[...scene.shots]; s[i]={...s[i],duration:e.target.value}; onShotChange(s) }}
+                        placeholder="Durée estimée (ex: 3s)" className="w-full text-xs px-2 py-1.5 rounded-lg outline-none"
+                        style={{ background: T.card, border: `1px solid ${T.border}`, color: T.fg }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FACE 3 — Son & Lumière */}
+          {scene.face === 3 && (
+            <div className="p-4 grid sm:grid-cols-2 gap-5">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold mb-3" style={{ color: '#a78bfa' }}>
+                  <Camera size={12} /> Caméra
+                </div>
+                <div className="space-y-2">
+                  {([
+                    { key: 'angle' as const, label: 'Angle de vue', opts: ['Face','Plongée','Contre-plongée','Plongée zénithale','Œil de bœuf','Hollandais'] },
+                    { key: 'movement' as const, label: 'Mouvement', opts: ['Fixe','Travelling avant','Travelling arrière','Panoramique H','Tilt vertical','Steadicam','Grue / Crane','Drone'] },
+                    { key: 'focal' as const, label: 'Focale', opts: ['14mm (grand angle)','24mm','35mm','50mm (standard)','85mm (portrait)','135mm','200mm (télé)'] },
+                  ] as const).map(f => (
+                    <div key={f.key}>
+                      <p className="text-[10px] mb-1" style={{ color: T.hintText }}>{f.label}</p>
+                      <select value={scene.camera[f.key]} onChange={e => onCameraChange(f.key, e.target.value)}
+                        className="w-full text-xs px-3 py-2 rounded-lg outline-none"
+                        style={{ background: T.hint, border: `1px solid ${T.border}`, color: T.fg }}>
+                        <option value="">— choisir —</option>
+                        {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-xs font-bold mb-3" style={{ color: '#fbbf24' }}>
+                  <Lightbulb size={12} /> Lumière
+                </div>
+                <div className="space-y-2">
+                  {([
+                    { key: 'key' as const, label: 'Source principale (clé)', opts: ['Gauche','Droite','Face','Contre-jour','Zénith','Ambiance douce'] },
+                    { key: 'fill' as const, label: 'Type de lumière', opts: ['Naturelle — fenêtre','Néon froid','Bougie / chaud','Projecteur dur','Lumière diffuse','Aucune (nuit)'] },
+                    { key: 'ambiance' as const, label: 'Palette colorée', opts: ['Neutre','Chaude dorée','Froide bleue','Bleue nuit','Vert fade','Orange crépuscule','Noir & blanc'] },
+                  ] as const).map(f => (
+                    <div key={f.key}>
+                      <p className="text-[10px] mb-1" style={{ color: T.hintText }}>{f.label}</p>
+                      <select value={scene.lighting[f.key]} onChange={e => onLightingChange(f.key, e.target.value)}
+                        className="w-full text-xs px-3 py-2 rounded-lg outline-none"
+                        style={{ background: T.hint, border: `1px solid ${T.border}`, color: T.fg }}>
+                        <option value="">— choisir —</option>
+                        {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="sm:col-span-2">
+                <div className="flex items-center gap-2 text-xs font-bold mb-3" style={{ color: '#34d399' }}>
+                  <Volume2 size={12} /> Son
+                </div>
+                <div className="grid sm:grid-cols-3 gap-2">
+                  {([
+                    { key: 'direct' as const, label: 'Son direct', opts: ['Synchro direct','Playback','Voix off','Silence / muet'] },
+                    { key: 'music' as const, label: 'Musique', opts: ['Originale','Préexistante','Silence','Diégétique (dans la scène)'] },
+                    { key: 'ambiance' as const, label: 'Ambiance sonore', opts: ['Extérieur jour','Extérieur nuit','Intérieur calme','Bruit de foule','Silence oppressant','Pluie / orage'] },
+                  ] as const).map(f => (
+                    <div key={f.key}>
+                      <p className="text-[10px] mb-1" style={{ color: T.hintText }}>{f.label}</p>
+                      <select value={scene.sound[f.key]} onChange={e => onSoundChange(f.key, e.target.value)}
+                        className="w-full text-xs px-3 py-2 rounded-lg outline-none"
+                        style={{ background: T.hint, border: `1px solid ${T.border}`, color: T.fg }}>
+                        <option value="">— choisir —</option>
+                        {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FACE 4 — Notes */}
+          {scene.face === 4 && (
+            <div className="p-4">
+              <div className="flex items-center gap-2 text-xs font-bold mb-3" style={{ color: '#4ade80' }}>
+                <FileText size={12} /> Notes de réalisation
+              </div>
+              <textarea value={scene.notes} onChange={e => onNotesChange(e.target.value)}
+                placeholder="Intentions, références visuelles, humeur de la scène, consignes pour les acteurs..."
+                rows={6} className="w-full text-sm rounded-xl px-4 py-3 outline-none resize-none font-mono leading-6"
+                style={{ background: T.hint, border: `1px solid ${T.border}`, color: T.fg }}
+                spellCheck={true} />
+            </div>
+          )}
+
+          {/* Comment input */}
+          {commentBlockId && (
+            <div className="px-4 pb-3 border-t" style={{ borderColor: T.borderSoft }}>
+              <div className="flex gap-2 mt-3 items-center">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                  style={{ background: '#1d4ed8', color: 'white' }}>M</div>
+                <input value={commentText} onChange={e => setCommentText(e.target.value)}
+                  placeholder="Commentaire... (Enter pour envoyer)"
+                  className="flex-1 text-xs px-3 py-2 rounded-lg outline-none"
+                  style={{ background: T.hint, border: `1px solid ${T.border}`, color: T.fg }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && commentText.trim()) { onAddComment(commentBlockId, commentText.trim()); setCommentText(''); setCommentBlockId(null) }
+                    if (e.key === 'Escape') { setCommentBlockId(null); setCommentText('') }
+                  }} autoFocus />
+                <button onClick={() => setCommentBlockId(null)} style={{ color: T.hintText }}><X size={14} /></button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Completion bar (bottom of card) ── */}
+        <div className="absolute bottom-0 left-0 right-16 h-0.5 flex">
+          {(() => {
+            const checks = [
+              scene.blocks.some(b => b.text.length > 0),
+              !!scene.imageUrl,
+              scene.shots.length > 0,
+              !!(scene.camera.angle || scene.lighting.key || scene.sound.direct),
+              scene.notes.length > 0,
+            ]
+            const colors = ['#e8a020','#60a5fa','#f97316','#a78bfa','#4ade80']
+            return checks.map((done, i) => (
+              <div key={i} className="flex-1 transition-all duration-500"
+                style={{ background: done ? colors[i] : T.border, opacity: done ? 0.8 : 0.3 }} />
+            ))
+          })()}
+        </div>
+        <FlipTab face={scene.face} onClick={() => onFaceChange(((scene.face + 1) % 5) as SceneFace)} />
+      </div>
+    </div>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+function defaultScene(): Scene {
+  return {
+    id: uid(), heading: '', face: 0, imageUrl: null, shots: [],
+    blocks: [{ id: uid(), type: 'action', text: '' }],
+    camera: { angle: '', movement: '', focal: '' },
+    lighting: { key: '', fill: '', ambiance: '' },
+    sound: { direct: '', music: '', ambiance: '' },
+    notes: '', comments: [],
+  }
+}
+
+function countWords(scenes: Scene[]) {
+  return scenes.reduce((total, s) => total + s.blocks.reduce((t, b) => t + b.text.split(/\s+/).filter(Boolean).length, 0), 0)
+}
+
+// ─── Chat types & mock data ───────────────────────────────────────────
+interface ChatMsg { id: string; author: string; color: string; text: string; time: string; quote?: string; img?: string; dm?: boolean }
+
+const MOCK_MEMBERS = [
+  { name: 'Toi', color: '#e8a020', initials: 'T' },
+  { name: 'Léa', color: '#60a5fa', initials: 'L' },
+  { name: 'Marcus', color: '#a78bfa', initials: 'M' },
+  { name: 'Sofia', color: '#4ade80', initials: 'S' },
+]
+
+const MOCK_GROUP: ChatMsg[] = [
+  { id: '1', author: 'Léa', color: '#60a5fa', text: "J'ai regardé le script de la séq 3, on devrait revoir la lumière pour le retour de Marcus 👀", time: '14:32' },
+  { id: '2', author: 'Marcus', color: '#a78bfa', text: "Ouais je suis d'accord, contre-jour plutôt que face non ?", time: '14:34' },
+  { id: '3', author: 'Sofia', color: '#4ade80', text: "J'ai mis un storyboard de référence dans la séq 2, regardez !", time: '14:41' },
+  { id: '4', author: 'Léa', color: '#60a5fa', quote: "J'ai mis un storyboard de référence dans la séq 2, regardez !", text: "Parfait, exactement l'ambiance qu'on cherchait 🔥", time: '14:42' },
+]
+
+const MOCK_DMS: Record<string, ChatMsg[]> = {
+  'Léa': [
+    { id: 'd1', author: 'Léa', color: '#60a5fa', text: "Hey, t'as une minute pour parler du tournage de samedi ?", time: '13:10', dm: true },
+    { id: 'd2', author: 'Toi', color: '#e8a020', text: "Oui bien sûr, c'est quoi le souci ?", time: '13:12', dm: true },
+    { id: 'd3', author: 'Léa', color: '#60a5fa', text: "Je peux pas venir avant 15h finalement 😬", time: '13:13', dm: true },
+  ],
+  'Marcus': [
+    { id: 'd4', author: 'Marcus', color: '#a78bfa', text: "Est-ce que je comprends pas cette didascalie là →", time: '11:20', dm: true, quote: 'INT. ESCALIER — NUIT. Il monte lentement, dos à la caméra.' },
+  ],
+  'Sofia': [],
+}
+
+// ─── Chat panel ───────────────────────────────────────────────────────
+function ChatPanel({ onClose, theme }: { onClose: () => void; theme: Theme }) {
+  const T = THEME[theme]
+  const [tab, setTab] = useState<'group' | string>('group')
+  const [input, setInput] = useState('')
+  const [groupMsgs, setGroupMsgs] = useState<ChatMsg[]>(MOCK_GROUP)
+  const [dmMsgs, setDmMsgs] = useState<Record<string, ChatMsg[]>>(MOCK_DMS)
+  const [quoting, setQuoting] = useState<string | null>(null)
+  const [showGroupMenu, setShowGroupMenu] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [groupMsgs, dmMsgs, tab])
+
+  const send = () => {
+    if (!input.trim()) return
+    const msg: ChatMsg = { id: uid(), author: 'Toi', color: '#e8a020', text: input.trim(), time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), quote: quoting ?? undefined }
+    if (tab === 'group') setGroupMsgs(m => [...m, msg])
+    else setDmMsgs(d => ({ ...d, [tab]: [...(d[tab] ?? []), msg] }))
+    setInput(''); setQuoting(null)
+  }
+
+  const sendImg = (url: string) => {
+    const msg: ChatMsg = { id: uid(), author: 'Toi', color: '#e8a020', text: '', time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), img: url }
+    if (tab === 'group') setGroupMsgs(m => [...m, msg])
+    else setDmMsgs(d => ({ ...d, [tab]: [...(d[tab] ?? []), msg] }))
+  }
+
+  const msgs = tab === 'group' ? groupMsgs : (dmMsgs[tab] ?? [])
+
+  return (
+    <div className="flex flex-col h-full" style={{ background: T.chatBg, color: T.fg, width: 300, borderLeft: `1px solid ${T.chatBorder}` }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${T.chatBorder}` }}>
+        <div className="flex items-center gap-2">
+          <div className="flex -space-x-1">
+            {MOCK_MEMBERS.slice(0,3).map(m => (
+              <div key={m.name} className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black border"
+                style={{ background: m.color, color: '#000', borderColor: T.chatBg }}>{m.initials}</div>
+            ))}
+          </div>
+          <span className="text-xs font-bold">Équipe · {MOCK_MEMBERS.length}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Group settings */}
+          <div className="relative">
+            <button onClick={() => setShowGroupMenu(v => !v)}
+              className="p-1.5 rounded-lg transition-colors"
+              style={{ color: T.chatMuted, background: showGroupMenu ? T.chatMsg : 'transparent' }}
+              title="Paramètres du groupe">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </svg>
+            </button>
+            {showGroupMenu && (
+              <div className="absolute right-0 top-full mt-1 rounded-xl overflow-hidden shadow-2xl z-50 min-w-[180px]"
+                style={{ background: theme === 'dark' ? '#1c1c1c' : '#ffffff', border: `1px solid ${T.chatBorder}` }}
+                onClick={() => setShowGroupMenu(false)}>
+                <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider" style={{ color: T.chatMuted, borderBottom: `1px solid ${T.chatBorder}` }}>
+                  Membres
+                </div>
+                {MOCK_MEMBERS.filter(m => m.name !== 'Toi').map(m => (
+                  <div key={m.name} className="flex items-center justify-between px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-black"
+                        style={{ background: m.color, color: '#000' }}>{m.initials}</div>
+                      <span className="text-xs font-medium" style={{ color: T.fg }}>{m.name}</span>
+                    </div>
+                    <button className="text-[10px] px-2 py-0.5 rounded-lg transition-colors"
+                      style={{ color: '#f87171', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.15)' }}
+                      onClick={() => alert(`${m.name} exclu(e) du groupe (simulation)`)}>
+                      Exclure
+                    </button>
+                  </div>
+                ))}
+                <div style={{ borderTop: `1px solid ${T.chatBorder}` }}>
+                  <button className="w-full text-left px-3 py-2.5 text-xs font-bold transition-colors"
+                    style={{ color: '#f87171' }}
+                    onClick={() => alert('Vous avez quitté le groupe (simulation)')}>
+                    Quitter le groupe
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg transition-colors" style={{ color: T.chatMuted }}>
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex flex-shrink-0" style={{ borderBottom: `1px solid ${T.chatBorder}` }}>
+        <button onClick={() => setTab('group')}
+          className="flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold transition-colors flex-1 justify-center"
+          style={{ color: tab === 'group' ? '#e8a020' : T.chatMuted, borderBottom: tab === 'group' ? '2px solid #e8a020' : '2px solid transparent' }}>
+          <Users size={11} /> Groupe
+        </button>
+        {MOCK_MEMBERS.filter(m => m.name !== 'Toi').map(m => (
+          <button key={m.name} onClick={() => setTab(m.name)}
+            className="flex items-center gap-1 px-3 py-2.5 text-xs font-bold transition-colors flex-1 justify-center relative"
+            style={{ color: tab === m.name ? m.color : T.chatMuted, borderBottom: tab === m.name ? `2px solid ${m.color}` : '2px solid transparent' }}>
+            <Lock size={9} />
+            <div className="w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-black" style={{ background: m.color, color: '#000' }}>{m.initials}</div>
+          </button>
+        ))}
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-4" style={{ scrollbarWidth: 'none' }}>
+        {msgs.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full gap-3" style={{ opacity: 0.4 }}>
+            <MessageCircle size={28} />
+            <p className="text-xs text-center">Début de la conversation</p>
+          </div>
+        )}
+        {msgs.map((msg, i) => {
+          const isMe = msg.author === 'Toi'
+          const showAvatar = i === 0 || msgs[i-1].author !== msg.author
+          return (
+            <div key={msg.id} className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
+              {/* Avatar */}
+              <div className="flex-shrink-0 w-7 h-7 mt-0.5">
+                {showAvatar && (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-black"
+                    style={{ background: msg.color, color: '#000' }}>
+                    {msg.author[0]}
+                  </div>
+                )}
+              </div>
+              <div className={`flex flex-col gap-1 max-w-[75%] ${isMe ? 'items-end' : 'items-start'}`}>
+                {showAvatar && (
+                  <div className={`flex items-center gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+                    <span className="text-[10px] font-bold" style={{ color: msg.color }}>{msg.author}</span>
+                    <span className="text-[9px]" style={{ color: T.chatMuted }}>{msg.time}</span>
+                  </div>
+                )}
+                {/* Quote */}
+                {msg.quote && (
+                  <div className="flex items-start gap-1.5 px-2 py-1 rounded-lg text-[10px] max-w-full"
+                    style={{ background: T.chatMsg, borderLeft: `2px solid ${T.chatBorder}`, color: T.chatMuted }}>
+                    <Quote size={8} className="flex-shrink-0 mt-0.5" />
+                    <span className="italic line-clamp-2">{msg.quote}</span>
+                  </div>
+                )}
+                {/* Image */}
+                {msg.img && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={msg.img} alt="meme" className="rounded-xl max-w-full object-cover" style={{ maxHeight: 160 }} />
+                )}
+                {/* Text */}
+                {msg.text && (
+                  <div className="relative">
+                    <div className="px-3 py-2 rounded-2xl text-xs leading-5"
+                      style={{ background: isMe ? '#e8a020' : T.chatMsg, color: isMe ? '#000' : T.fg, borderRadius: isMe ? '16px 4px 16px 16px' : '4px 16px 16px 16px' }}>
+                      {msg.text}
+                    </div>
+                    {/* Quote action */}
+                    <button onClick={() => setQuoting(msg.text)}
+                      className="absolute -top-1 right-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg"
+                      style={{ background: T.chatMsg }}>
+                      <Quote size={9} style={{ color: T.chatMuted }} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Quote preview */}
+      {quoting && (
+        <div className="mx-3 mb-1 flex items-center gap-2 px-3 py-2 rounded-xl"
+          style={{ background: T.chatMsg, border: `1px solid ${T.chatBorder}` }}>
+          <Quote size={10} style={{ color: '#e8a020', flexShrink: 0 }} />
+          <span className="text-[10px] italic flex-1 truncate" style={{ color: T.chatMuted }}>{quoting}</span>
+          <button onClick={() => setQuoting(null)} style={{ color: T.chatMuted }}><X size={12} /></button>
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="px-3 pb-4 pt-2 flex-shrink-0">
+        <div className="flex items-end gap-2 px-3 py-2 rounded-2xl" style={{ background: T.chatInput, border: `1px solid ${T.chatBorder}` }}>
+          <textarea value={input} onChange={e => setInput(e.target.value)}
+            placeholder={tab === 'group' ? 'Message au groupe...' : `Message privé à ${tab}...`}
+            rows={1} className="flex-1 bg-transparent outline-none text-xs leading-5 resize-none"
+            style={{ maxHeight: 80, color: T.fg, scrollbarWidth: 'none' }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} />
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => fileRef.current?.click()}
+              className="p-1.5 rounded-lg transition-colors" style={{ color: T.chatMuted }} title="Image / Mème">
+              <Paperclip size={13} />
+            </button>
+            <button className="p-1.5 rounded-lg transition-colors" style={{ color: T.chatMuted }} title="Emoji">
+              <Smile size={13} />
+            </button>
+            <button onClick={send} disabled={!input.trim()}
+              className="p-1.5 rounded-xl transition-all disabled:opacity-30"
+              style={{ background: input.trim() ? '#e8a020' : 'transparent', color: input.trim() ? '#000' : T.chatMuted }}>
+              <Send size={13} />
+            </button>
+          </div>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) sendImg(URL.createObjectURL(f)) }} />
+        <p className="text-center mt-2 text-[9px]" style={{ color: T.chatMuted }}>
+          <AtSign size={8} style={{ display: 'inline' }} /> mention · Shift+Enter pour saut de ligne
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────
+export default function WritePage() {
+  const params = useParams()
+  const projectId = params.id as string
+
+  const [title, setTitle] = useState('Sans titre')
+  const [scenes, setScenes] = useState<Scene[]>([defaultScene()])
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null)
+  const [theme, setTheme] = useState<Theme>('dark')
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle')
+  const [loaded, setLoaded] = useState(false)
+  const [dragOver, setDragOver] = useState<string | null>(null)
+  const [presenting, setPresenting] = useState(false)
+  const [presentIdx, setPresentIdx] = useState(0)
+  const [showStats, setShowStats] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+  const [deleteToast, setDeleteToast] = useState<{ id: string; title: string; timer: ReturnType<typeof setTimeout> } | null>(null)
+  const dragScene = useRef<string | null>(null)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const T = THEME[theme]
+
+  // ── Load from localStorage ──
+  useEffect(() => {
+    const raw = localStorage.getItem(`tiany_project_${projectId}`)
+    if (raw) {
+      const data = JSON.parse(raw)
+      setTitle(data.title || 'Sans titre')
+      setScenes(data.scenes || [defaultScene()])
+      if (data.scenes?.[0]?.blocks?.[0]) setFocusedBlockId(data.scenes[0].blocks[0].id)
+    }
+    setLoaded(true)
+  }, [projectId])
+
+  // ── Auto-save (debounced 800ms) ──
+  const saveToStorage = useCallback((newTitle: string, newScenes: Scene[]) => {
+    setSaveStatus('saving')
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      const words = countWords(newScenes)
+      const pageCount = Math.max(1, Math.ceil(words / 200))
+      localStorage.setItem(`tiany_project_${projectId}`, JSON.stringify({ id: projectId, title: newTitle, scenes: newScenes }))
+      // Update index
+      const rawIdx = localStorage.getItem('tiany_index')
+      if (rawIdx) {
+        const idx = JSON.parse(rawIdx)
+        const updated = idx.map((p: { id: string }) => p.id === projectId
+          ? { ...p, title: newTitle, updatedAt: new Date().toISOString(), sceneCount: newScenes.length, pageCount }
+          : p)
+        localStorage.setItem('tiany_index', JSON.stringify(updated))
+      }
+      setSaveStatus('saved')
+    }, 800)
+  }, [projectId])
+
+  // ── Scenes mutators ──
+  const updateScene = useCallback(<K extends keyof Scene>(id: string, key: K, val: Scene[K]) => {
+    setScenes(prev => { const next = prev.map(s => s.id === id ? { ...s, [key]: val } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const deleteScene = useCallback((id: string) => {
+    setScenes(prev => {
+      if (prev.length === 1) return prev
+      const scene = prev.find(s => s.id === id)
+      if (!scene) return prev
+      // Show undo toast — actual deletion happens after 5s
+      setDeleteToast(t => {
+        if (t) clearTimeout(t.timer)
+        const timer = setTimeout(() => {
+          setScenes(p => { const n = p.filter(s => s.id !== id); saveToStorage(title, n); return n })
+          setDeleteToast(null)
+        }, 5000)
+        return { id, title: scene.heading || 'Sans titre', timer }
+      })
+      return prev
+    })
+  }, [saveToStorage, title])
+
+  const undoDelete = useCallback(() => {
+    if (!deleteToast) return
+    clearTimeout(deleteToast.timer)
+    setDeleteToast(null)
+  }, [deleteToast])
+
+  const addScene = useCallback(() => {
+    const s = defaultScene()
+    setScenes(prev => { const next = [...prev, s]; saveToStorage(title, next); return next })
+    setFocusedBlockId(s.blocks[0].id)
+  }, [saveToStorage, title])
+
+  const updateBlock = useCallback((sceneId: string, blockId: string, text: string) => {
+    setScenes(prev => { const next = prev.map(s => s.id === sceneId ? { ...s, blocks: s.blocks.map(b => b.id === blockId ? { ...b, text } : b) } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const changeBlockType = useCallback((sceneId: string, blockId: string, type: BlockType) => {
+    setScenes(prev => { const next = prev.map(s => s.id === sceneId ? { ...s, blocks: s.blocks.map(b => b.id === blockId ? { ...b, type } : b) } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const deleteBlock = useCallback((sceneId: string, blockId: string) => {
+    setScenes(prev => {
+      const next = prev.map(s => {
+        if (s.id !== sceneId || s.blocks.length === 1) return s
+        const idx = s.blocks.findIndex(b => b.id === blockId)
+        const blocks = s.blocks.filter(b => b.id !== blockId)
+        setFocusedBlockId(blocks[Math.max(0, idx - 1)]?.id ?? null)
+        return { ...s, blocks }
+      })
+      saveToStorage(title, next); return next
+    })
+  }, [saveToStorage, title])
+
+  const addBlock = useCallback((sceneId: string, afterBlockId: string) => {
+    setScenes(prev => {
+      const next = prev.map(s => {
+        if (s.id !== sceneId) return s
+        const idx = s.blocks.findIndex(b => b.id === afterBlockId)
+        const cur = s.blocks[idx]
+        const nb: Block = { id: uid(), type: BLOCK_CONFIG[cur?.type ?? 'action'].next, text: '' }
+        const blocks = [...s.blocks]; blocks.splice(idx + 1, 0, nb)
+        setFocusedBlockId(nb.id)
+        return { ...s, blocks }
+      })
+      saveToStorage(title, next); return next
+    })
+  }, [saveToStorage, title])
+
+  const addComment = useCallback((sceneId: string, blockId: string, text: string) => {
+    const c: Comment = { id: uid(), author: 'Moi', text, blockId }
+    setScenes(prev => { const next = prev.map(s => s.id === sceneId ? { ...s, comments: [...s.comments, c] } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const updateShots = useCallback((sceneId: string, shots: Shot[]) => {
+    setScenes(prev => { const next = prev.map(s => s.id === sceneId ? { ...s, shots } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const updateSound = useCallback((sceneId: string, key: keyof Scene['sound'], val: string) => {
+    setScenes(prev => { const next = prev.map(s => s.id === sceneId ? { ...s, sound: { ...s.sound, [key]: val } } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const updateNotes = useCallback((sceneId: string, notes: string) => {
+    setScenes(prev => { const next = prev.map(s => s.id === sceneId ? { ...s, notes } : s); saveToStorage(title, next); return next })
+  }, [saveToStorage, title])
+
+  const handleTitleChange = (v: string) => {
+    setTitle(v)
+    saveToStorage(v, scenes)
+  }
+
+  // ── Drag to reorder scenes ──
+  const handleDragStart = (id: string) => { dragScene.current = id }
+  const handleDragOver = (e: React.DragEvent, id: string) => { e.preventDefault(); setDragOver(id) }
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault(); setDragOver(null)
+    const from = dragScene.current; dragScene.current = null
+    if (!from || from === targetId) return
+    setScenes(prev => {
+      const fromIdx = prev.findIndex(s => s.id === from)
+      const toIdx = prev.findIndex(s => s.id === targetId)
+      const next = [...prev]
+      const [moved] = next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, moved)
+      saveToStorage(title, next); return next
+    })
+  }
+
+  // ── Export ──
+  const handleExport = () => {
+    const lines = scenes.flatMap(s => {
+      const p: string[] = [s.heading || 'INT. — JOUR']
+      s.blocks.forEach(b => { if (b.text) p.push(b.text) })
+      return p
+    })
+    const blob = new Blob([lines.join('\n\n')], { type: 'text/plain' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = `${title.replace(/\s+/g,'_')}.txt`; a.click()
+  }
+
+  // ── Computed ──
+  const words = countWords(scenes)
+  const pages = Math.max(1, Math.ceil(words / 200))
+
+  if (!loaded) return <div className="min-h-screen" style={{ background: '#080808' }} />
+
+  return (
+    <div className="min-h-screen flex flex-col transition-colors duration-200" style={{ background: T.bg, color: T.fg }}>
+
+      {/* Header */}
+      <header className="flex items-center gap-3 px-4 h-12 sticky top-0 z-40 flex-shrink-0"
+        style={{ borderBottom: `1px solid ${T.border}`, background: T.header, backdropFilter: 'blur(12px)' }}>
+        <Link href="/projects" className="flex items-center justify-center w-8 h-8 rounded-lg hover:opacity-70 transition-opacity flex-shrink-0"
+          style={{ background: T.addBtn, color: T.addBtnText }}>
+          <ArrowLeft size={14} />
+        </Link>
+        <div className="w-px h-4 flex-shrink-0" style={{ background: T.divider }} />
+        <input value={title} onChange={e => handleTitleChange(e.target.value)}
+          className="bg-transparent outline-none text-sm font-semibold flex-1 min-w-0"
+          style={{ color: T.inputColor }} placeholder="Titre du projet" />
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          {/* Save status */}
+          <div className="flex items-center gap-1 text-xs" style={{ color: T.seqCount }}>
+            {saveStatus === 'saving' && <span>Sauvegarde...</span>}
+            {saveStatus === 'saved' && <><Check size={10} style={{ color: '#4ade80' }} /><span style={{ color: '#4ade80' }}>Sauvegardé</span></>}
+          </div>
+          {/* Stats */}
+          <button onClick={() => setShowStats(s => !s)}
+            className="hidden sm:flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-all hover:opacity-80"
+            style={{ background: T.addBtn, color: T.seqCount }}>
+            <Clock size={10} /><span>{pages} p. · ~{pages} min</span>
+            <BarChart2 size={10} className="ml-1" />
+          </button>
+          <button onClick={() => { setPresenting(true); setPresentIdx(0) }}
+            className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-80 transition-opacity"
+            style={{ background: 'rgba(96,165,250,0.1)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.2)' }}>
+            <Play size={11} /> Présenter
+          </button>
+          {/* Chat toggle */}
+          <button onClick={() => setShowChat(c => !c)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-80 transition-all relative"
+            style={{ background: showChat ? 'rgba(232,160,32,0.15)' : 'rgba(255,255,255,0.06)', color: showChat ? '#e8a020' : 'rgba(255,255,255,0.5)', border: showChat ? '1px solid rgba(232,160,32,0.3)' : '1px solid rgba(255,255,255,0.08)' }}>
+            <MessageCircle size={11} />
+            <span className="hidden sm:inline">Chat</span>
+            {/* Online dot */}
+            <span className="w-1.5 h-1.5 rounded-full absolute -top-0.5 -right-0.5" style={{ background: '#4ade80' }} />
+          </button>
+          <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all hover:opacity-70"
+            style={{ background: T.addBtn, color: T.addBtnText }}>
+            {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+          </button>
+          <button onClick={handleExport}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg hover:opacity-80"
+            style={{ background: 'rgba(232,160,32,0.1)', color: '#e8a020', border: '1px solid rgba(232,160,32,0.2)' }}>
+            <Download size={11} /> Exporter
+          </button>
+        </div>
+      </header>
+
+      {/* Stats panel */}
+      {showStats && (() => {
+        const totalShots = scenes.reduce((t, s) => t + s.shots.length, 0)
+        const filled = scenes.filter(s => s.blocks.some(b => b.text)).length
+        const withImg = scenes.filter(s => s.imageUrl).length
+        const withNotes = scenes.filter(s => s.notes).length
+        const chars = [...new Set(scenes.flatMap(s => s.blocks.filter(b => b.type === 'character').map(b => b.text)).filter(Boolean))]
+        return (
+          <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center"
+            style={{ borderBottom: `1px solid ${T.border}`, background: T.cardHeader }}>
+            {[
+              { label: 'Séquences', val: scenes.length, color: '#e8a020' },
+              { label: 'Pages · Minutes', val: `${pages} · ${pages}`, color: '#60a5fa' },
+              { label: 'Plans découpés', val: totalShots, color: '#f97316' },
+              { label: 'Personnages', val: chars.length, color: '#a78bfa' },
+              { label: 'Scripts écrits', val: `${filled}/${scenes.length}`, color: '#e8a020' },
+              { label: 'Storyboards', val: `${withImg}/${scenes.length}`, color: '#60a5fa' },
+              { label: 'Notes réalisa.', val: `${withNotes}/${scenes.length}`, color: '#4ade80' },
+              { label: 'Mots total', val: words, color: '#6b7280' },
+            ].map(s => (
+              <div key={s.label} className="rounded-xl p-3" style={{ background: T.card }}>
+                <p className="text-lg font-black" style={{ color: s.color }}>{s.val}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: T.hintText }}>{s.label}</p>
+              </div>
+            ))}
+            {chars.length > 0 && (
+              <div className="col-span-2 sm:col-span-4 rounded-xl p-3 text-left" style={{ background: T.card }}>
+                <p className="text-[10px] mb-2" style={{ color: T.hintText }}>Personnages</p>
+                <div className="flex flex-wrap gap-2">
+                  {chars.map(c => <span key={c} className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ background: 'rgba(232,160,32,0.1)', color: '#e8a020' }}>{c}</span>)}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Hint bar */}
+      <div className="flex items-center gap-4 px-5 py-2 text-xs flex-wrap"
+        style={{ borderBottom: `1px solid ${T.hint}`, color: T.hintText }}>
+        <span><b style={{ color: T.hintBold }}>Enter</b> → bloc suivant</span>
+        <span><b style={{ color: T.hintBold }}>Tab</b> → changer le type</span>
+        <span>La <b style={{ color: '#e8a020' }}>flèche à droite</b> bascule entre 5 vues</span>
+      </div>
+
+      {/* Editor + Chat side by side */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto w-full px-4 py-8">
+        {scenes.map(scene => (
+          <div key={scene.id}
+            draggable
+            onDragStart={() => handleDragStart(scene.id)}
+            onDragOver={e => handleDragOver(e, scene.id)}
+            onDragLeave={() => setDragOver(null)}
+            onDrop={e => handleDrop(e, scene.id)}
+            style={{ opacity: dragOver === scene.id ? 0.5 : 1, transition: 'opacity 0.15s' }}>
+            <SceneCard scene={scene} focusedBlockId={focusedBlockId} theme={theme}
+              dragHandleProps={{ onMouseDown: e => e.currentTarget.closest('[draggable]')?.setAttribute('draggable','true') }}
+              onHeadingChange={v => updateScene(scene.id, 'heading', v)}
+              onBlockChange={(bid, v) => updateBlock(scene.id, bid, v)}
+              onBlockType={(bid, t) => changeBlockType(scene.id, bid, t)}
+              onBlockDelete={bid => deleteBlock(scene.id, bid)}
+              onBlockAdd={bid => addBlock(scene.id, bid)}
+              onBlockFocus={bid => setFocusedBlockId(bid)}
+              onFaceChange={f => updateScene(scene.id, 'face', f)}
+              onImageDrop={url => updateScene(scene.id, 'imageUrl', url || null)}
+              onCameraChange={(k, v) => updateScene(scene.id, 'camera', { ...scene.camera, [k]: v })}
+              onLightingChange={(k, v) => updateScene(scene.id, 'lighting', { ...scene.lighting, [k]: v })}
+              onSoundChange={(k, v) => updateSound(scene.id, k, v)}
+              onShotChange={shots => updateShots(scene.id, shots)}
+              onNotesChange={v => updateNotes(scene.id, v)}
+              onDeleteScene={() => deleteScene(scene.id)}
+              onAddComment={(bid, text) => addComment(scene.id, bid, text)}
+            />
+          </div>
+        ))}
+        <button onClick={addScene}
+          className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl transition-all text-sm font-semibold hover:opacity-70"
+          style={{ border: `1px dashed ${T.border}`, color: T.addBtnText }}>
+          <Plus size={14} /> Nouvelle séquence
+        </button>
+        </div>
+        </div>
+
+        {/* Chat panel */}
+        {showChat && (
+          <div className="flex-shrink-0 h-full sticky top-0 overflow-hidden hidden md:flex"
+            style={{ height: 'calc(100vh - 48px)' }}>
+            <ChatPanel onClose={() => setShowChat(false)} theme={theme} />
+          </div>
+        )}
+      </div>
+
+      {/* ── Mode présentation ── */}
+      {presenting && (() => {
+        const scene = scenes[presentIdx]
+        const face = FACES[scene.face]
+        const FaceIcon = face.icon
+        const progress = ((presentIdx + 1) / scenes.length) * 100
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col"
+            style={{ background: '#050505', color: '#f0ede8' }}
+            onKeyDown={e => {
+              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') setPresentIdx(i => Math.min(i + 1, scenes.length - 1))
+              if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') setPresentIdx(i => Math.max(i - 1, 0))
+              if (e.key === 'Escape') setPresenting(false)
+            }} tabIndex={0} autoFocus>
+            {/* Progress bar */}
+            <div className="h-1 w-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
+              <div className="h-full transition-all duration-300" style={{ width: `${progress}%`, background: face.color }} />
+            </div>
+            {/* Top bar */}
+            <div className="flex items-center justify-between px-8 py-4">
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded flex items-center justify-center" style={{ background: '#e8a020' }}>
+                  <Film size={13} className="text-black" />
+                </div>
+                <span className="font-black">{title}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>{presentIdx + 1} / {scenes.length}</span>
+                <button onClick={() => setPresenting(false)} className="p-2 rounded-lg hover:bg-white/10 transition-colors" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            {/* Main content */}
+            <div className="flex-1 flex flex-col items-center justify-center px-12 max-w-4xl mx-auto w-full">
+              <div className="flex items-center gap-3 mb-6">
+                <FaceIcon size={16} style={{ color: face.color }} />
+                <span className="text-xs font-bold uppercase tracking-widest" style={{ color: face.color }}>{face.label}</span>
+              </div>
+              <h2 className="text-3xl font-black text-center mb-8 font-mono" style={{ color: '#e8a020' }}>
+                {scene.heading || 'INT. — JOUR'}
+              </h2>
+              {scene.face === 0 && (
+                <div className="w-full max-w-2xl space-y-3 text-center">
+                  {scene.blocks.filter(b => b.text).slice(0, 6).map(b => {
+                    const cfg = BLOCK_CONFIG[b.type]
+                    return (
+                      <p key={b.id} className="text-base leading-7 font-mono"
+                        style={{ ...cfg.style, color: b.type === 'character' ? '#e8a020' : '#c8c4be', fontSize: b.type === 'character' ? '0.85rem' : '1rem' }}>
+                        {b.text}
+                      </p>
+                    )
+                  })}
+                </div>
+              )}
+              {scene.face === 1 && scene.imageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={scene.imageUrl} alt="storyboard" className="max-h-80 rounded-2xl object-contain" />
+              )}
+              {scene.face === 1 && !scene.imageUrl && (
+                <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>Pas d&apos;image pour cette séquence</p>
+              )}
+              {scene.face === 4 && scene.notes && (
+                <p className="text-base leading-7 font-mono max-w-2xl text-center" style={{ color: 'rgba(255,255,255,0.7)' }}>{scene.notes}</p>
+              )}
+            </div>
+            {/* Nav */}
+            <div className="flex items-center justify-center gap-6 pb-8">
+              <button onClick={() => setPresentIdx(i => Math.max(i - 1, 0))}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl transition-all hover:opacity-70 disabled:opacity-20"
+                style={{ background: 'rgba(255,255,255,0.07)' }} disabled={presentIdx === 0}>
+                <ChevronLeft size={18} /> Précédent
+              </button>
+              <div className="flex gap-1.5">
+                {scenes.map((_, i) => (
+                  <button key={i} onClick={() => setPresentIdx(i)}
+                    className="w-2 h-2 rounded-full transition-all"
+                    style={{ background: i === presentIdx ? face.color : 'rgba(255,255,255,0.2)', transform: i === presentIdx ? 'scale(1.3)' : 'scale(1)' }} />
+                ))}
+              </div>
+              <button onClick={() => presentIdx === scenes.length - 1 ? setPresenting(false) : setPresentIdx(i => i + 1)}
+                className="flex items-center gap-2 px-6 py-3 rounded-2xl transition-all hover:opacity-70"
+                style={{ background: presentIdx === scenes.length - 1 ? 'rgba(232,160,32,0.15)' : 'rgba(255,255,255,0.07)', color: presentIdx === scenes.length - 1 ? '#e8a020' : '#f0ede8' }}>
+                {presentIdx === scenes.length - 1 ? 'Terminer' : 'Suivant'} <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Undo toast ── */}
+      {deleteToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl"
+          style={{ background: theme === 'dark' ? '#1c1c1c' : '#ffffff', border: `1px solid ${T.border}`, color: T.fg, boxShadow: T.shadow }}>
+          <Trash2 size={13} style={{ color: '#f87171' }} />
+          <span className="text-xs font-medium">Séquence supprimée</span>
+          <button onClick={undoDelete}
+            className="text-xs font-black px-3 py-1 rounded-xl transition-all hover:opacity-80"
+            style={{ background: 'rgba(232,160,32,0.15)', color: '#e8a020', border: '1px solid rgba(232,160,32,0.25)' }}>
+            Annuler
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}

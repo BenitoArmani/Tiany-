@@ -543,7 +543,7 @@ function SceneCard({ scene, focusedBlockId, theme, lang, fontPreset, dragHandleP
                   <div key={block.id}
                     className="group relative flex items-start gap-1 px-2 py-0.5 rounded-lg transition-colors"
                     style={{ background: isFocused ? T.blockFocus : 'transparent' }}>
-                    <div className={`flex-shrink-0 overflow-hidden pt-1.5 transition-all ${isFocused ? 'w-16 sm:w-20 opacity-100' : 'w-0 sm:w-20 opacity-0 group-hover:sm:opacity-70'}`}>
+                    <div className={`flex-shrink-0 overflow-hidden pt-1.5 transition-all ${isFocused ? 'w-16 sm:w-20 opacity-100' : 'w-0 sm:w-20 opacity-0 sm:group-hover:opacity-70'}`}>
                       <TypePicker current={block.type} onChange={t => onBlockType(block.id, t)} lang={lang} />
                     </div>
                     <div className="flex-shrink-0 w-0.5 self-stretch rounded-full mt-1 mb-1 transition-opacity"
@@ -567,7 +567,7 @@ function SceneCard({ scene, focusedBlockId, theme, lang, fontPreset, dragHandleP
                           else if (e.key === 'Backspace' && block.text === '') { e.preventDefault(); onBlockDelete(block.id) }
                         }} />
                     </div>
-                    <div className={`flex-shrink-0 flex items-center gap-1 pt-2 transition-opacity ${isFocused || hasComments ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                    <div className={`flex-shrink-0 flex items-center gap-1 pt-2 transition-opacity ${isFocused || hasComments ? 'opacity-100' : 'opacity-20 sm:opacity-0 sm:group-hover:opacity-100'}`}>
                       {hasComments && (
                         <div className="flex -space-x-1 mr-1">
                           {commentsFor('block', block.id).slice(0,3).map(c => (
@@ -654,7 +654,7 @@ function SceneCard({ scene, focusedBlockId, theme, lang, fontPreset, dragHandleP
                       <button
                         onPointerDown={e => e.stopPropagation()}
                         onClick={() => { deleteImage(url); onImagesChange(scene.imageUrls.filter((_, i) => i !== idx)); onImagePositionsChange((scene.imagePositions ?? scene.imageUrls.map(() => ({x:50,y:50}))).filter((_, i) => i !== idx)) }}
-                        className="absolute top-2 right-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-2 right-2 p-1.5 rounded-lg opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         style={{ background: 'rgba(0,0,0,0.75)' }}>
                         <X size={12} className="text-white" />
                       </button>
@@ -663,7 +663,7 @@ function SceneCard({ scene, focusedBlockId, theme, lang, fontPreset, dragHandleP
                       <button
                         onPointerDown={e => e.stopPropagation()}
                         onClick={() => setCommentTarget({type:'image', id:String(idx)})}
-                        className="absolute bottom-2 right-2 flex items-center gap-1 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute bottom-2 right-2 flex items-center gap-1 p-1.5 rounded-lg opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                         style={{ background: 'rgba(0,0,0,0.75)' }} title="Commenter cette image">
                         <MessageCircle size={11} className="text-white" />
                         {commentsFor('image', String(idx)).length > 0 && (
@@ -3892,10 +3892,10 @@ export default function WritePage() {
             </div>
 
             {/* Main content */}
-            <div className="flex-1 flex flex-col sm:flex-row overflow-y-auto sm:overflow-hidden min-h-0">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden min-h-0">
 
               {/* LEFT — Storyboard */}
-              <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 min-w-0 border-b sm:border-b-0 sm:border-r"
+              <div className="flex-1 flex flex-col items-center justify-center p-4 lg:p-8 min-w-0 border-b lg:border-b-0 lg:border-r"
                 style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
                 {hasImages ? (
                   <div className="w-full max-w-xl space-y-3">
@@ -3920,7 +3920,7 @@ export default function WritePage() {
               </div>
 
               {/* RIGHT — Script */}
-              <div className="flex-1 flex flex-col justify-center p-4 sm:p-8 overflow-y-auto min-w-0">
+              <div className="flex-1 flex flex-col justify-center p-4 lg:p-8 overflow-y-auto min-w-0">
                 {/* Scene heading */}
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2"
                   style={{ color: 'rgba(244,63,94,0.7)' }}>

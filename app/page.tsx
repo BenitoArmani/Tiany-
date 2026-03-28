@@ -97,6 +97,9 @@ function LoginCard() {
             <span key={g} className="guarantee-badge"><Check size={9} />{g}</span>
           ))}
         </div>
+        <p style={{ fontSize: 10, color: 'rgba(240,237,232,0.2)', textAlign: 'center', marginTop: -4 }}>
+          Court-métrage · Clip musical · Publicité · Documentaire
+        </p>
       </div>
     </div>
   )
@@ -457,9 +460,14 @@ export default function Home() {
               La pré-production<br />
               <em>sans friction.</em>
             </h1>
+            <p style={{ fontSize: 18, fontWeight: 600, color: 'rgba(240,237,232,0.85)', lineHeight: 1.45, marginBottom: 14 }}>
+              Écris ton script, crée ton storyboard et organise ton tournage — tout en un seul outil.
+            </p>
             <p className="hero-sub">
-              Script, storyboard, découpage, plan de scène, budget — tout en une seule app.
-              Pour les étudiants en cinéma et les réalisateurs indépendants.
+              Arrête de jongler entre 5 apps différentes. Tiany réunit script, storyboard, découpage technique, plan de scène et budget dans une interface conçue pour les réalisateurs.
+            </p>
+            <p style={{ fontSize: 13, color: 'rgba(240,237,232,0.45)', marginBottom: 28, fontStyle: 'italic' }}>
+              Passe de l'idée à la mise en scène en quelques heures — pas en plusieurs jours.
             </p>
             <div className="hero-stats">
               <div className="stat"><span className="stat-val">6</span><span className="stat-label">Outils par scène</span></div>

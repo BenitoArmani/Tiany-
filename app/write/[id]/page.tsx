@@ -2962,6 +2962,8 @@ export default function WritePage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [memberRole, setMemberRole] = useState<string | null>(null)
+  const [guidanceStep, setGuidanceStep] = useState<number | 'done' | null>(null)
+  const [wowToast, setWowToast] = useState(false)
   const [shootingOrder, setShootingOrder] = useState<string[]>([])
   const [shootingEntries, setShootingEntries] = useState<ShootingEntry[]>([])
   const [showTournage, setShowTournage] = useState(false)
@@ -3025,6 +3027,25 @@ export default function WritePage() {
     if (uid) getMemberRole(projectId, uid).then((r: string | null) => setMemberRole(r))
 
     if (!localStorage.getItem('tiany_onboarded')) setShowOnboarding(true)
+
+    // Init guidance funnel
+    const funnelState = localStorage.getItem(`tiany_funnel_${projectId}`)
+    if (funnelState === 'done') {
+      setGuidanceStep('done')
+    } else {
+      const hasContent = (localData as Record<string, unknown> | null)?.scenes
+        ? ((localData as Record<string, unknown>).scenes as Scene[])
+            .some((s: Scene) => s.blocks?.some((b: Block) => b.text?.trim()))
+        : false
+      if (hasContent) {
+        setGuidanceStep('done')
+        localStorage.setItem(`tiany_funnel_${projectId}`, 'done')
+      } else {
+        const step = parseInt(funnelState ?? '0')
+        setGuidanceStep(isNaN(step) ? 0 : Math.min(step, 2))
+      }
+    }
+
     setLoaded(true)
   }, [projectId, syncLoad])
 
@@ -3035,6 +3056,26 @@ export default function WritePage() {
   useEffect(() => { langRef.current = lang }, [lang])
   useEffect(() => { themeRef.current = theme }, [theme])
   useEffect(() => { fontPresetRef.current = fontPreset }, [fontPreset])
+
+  // ── Guidance funnel auto-advance ──
+  useEffect(() => {
+    if (!loaded || guidanceStep === 'done' || guidanceStep === null || guidanceStep >= 3) return
+    const s0 = scenes[0]
+    if (!s0) return
+    const advance = (step: number | 'done') => {
+      setGuidanceStep(step)
+      localStorage.setItem(`tiany_funnel_${projectId}`, step === 'done' ? 'done' : String(step))
+    }
+    if (guidanceStep === 0 && s0.blocks.some(b => b.text.trim().length > 0)) {
+      advance(1)
+    } else if (guidanceStep === 1 && s0.imageUrls.length > 0) {
+      advance(2)
+    } else if (guidanceStep === 2 && s0.face === 5) {
+      advance(3)
+      setWowToast(true)
+      setTimeout(() => { setWowToast(false); advance('done') }, 3500)
+    }
+  }, [scenes, guidanceStep, loaded, projectId])
 
   // ── Preload all IDB image URLs into module cache ──
   useEffect(() => {
@@ -3725,9 +3766,18 @@ export default function WritePage() {
         ))}
         <button onClick={addScene}
           className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl transition-all text-sm font-semibold hover:opacity-70"
-          style={{ border: `1px dashed ${T.border}`, color: T.addBtnText }}>
-          <Plus size={14} /> {UI[lang].addScene}
+          style={{
+            border: `1px dashed ${guidanceStep === 'done' && scenes.length === 1 ? '#e8a020' : T.border}`,
+            color: guidanceStep === 'done' && scenes.length === 1 ? '#e8a020' : T.addBtnText,
+          }}>
+          <Plus size={14} />
+          {guidanceStep === 'done' && scenes.length === 1 ? 'Crée ta deuxième scène →' : UI[lang].addScene}
         </button>
+        {guidanceStep === 'done' && scenes.length >= 3 && (
+          <p className="text-center text-xs py-2 pb-4" style={{ color: T.hintText }}>
+            ✦ Export HD, IA et collaboration avancée — fonctionnalités premium bientôt disponibles
+          </p>
+        )}
         </div>
         </div>
 
@@ -4223,6 +4273,37 @@ export default function WritePage() {
           localStorage.setItem('tiany_onboarded', '1')
           setShowOnboarding(false)
         }} />
+      )}
+
+      {/* ── Guidance funnel hint ── */}
+      {guidanceStep !== null && guidanceStep !== 'done' && (guidanceStep as number) < 3 && !showOnboarding && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl"
+          style={{ background: T.card, border: `1px solid ${T.border}`, maxWidth: 'calc(100vw - 32px)', backdropFilter: 'blur(12px)' }}>
+          <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+            style={{ background: 'rgba(232,160,32,0.15)', color: '#e8a020' }}>
+            {(guidanceStep as number) + 1}
+          </div>
+          <p className="text-xs leading-snug" style={{ color: T.hintBold }}>
+            {guidanceStep === 0 && 'Commence par écrire ta première scène — tape une action ou un dialogue'}
+            {guidanceStep === 1 && "Super\u00a0! Maintenant clique sur l'icône 📷 Storyboard et ajoute une image"}
+            {guidanceStep === 2 && 'Presque\u00a0! Ouvre le Plan de Scène 🗺 pour positionner tes éléments'}
+          </p>
+          <button onClick={() => {
+            setGuidanceStep('done')
+            localStorage.setItem(`tiany_funnel_${projectId}`, 'done')
+          }} className="flex-shrink-0 opacity-40 hover:opacity-70 transition-opacity">
+            <X size={12} style={{ color: T.fg }} />
+          </button>
+        </div>
+      )}
+
+      {/* ── WOW moment toast ── */}
+      {wowToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-5 py-3 rounded-2xl shadow-xl pointer-events-none"
+          style={{ background: T.card, border: '1px solid rgba(232,160,32,0.35)', backdropFilter: 'blur(12px)' }}>
+          <span>🎬</span>
+          <p className="text-sm font-semibold whitespace-nowrap" style={{ color: T.fg }}>Ta scène est prête — script, storyboard et plan de scène ✓</p>
+        </div>
       )}
 
       {/* Tournage Panel */}

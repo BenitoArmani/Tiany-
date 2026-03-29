@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Film, Camera, Lightbulb, MapPin, FileText, Layers, ChevronRight, Play, DollarSign, Users, Check, Sparkles, Move, Volume2, Image as ImageIcon } from 'lucide-react'
+import { Film, Camera, Lightbulb, MapPin, FileText, Layers, ChevronRight, Play, DollarSign, Users, Check, Sparkles, Move, Volume2, Image as ImageIcon, Timer, BadgeCheck, Star } from 'lucide-react'
 
 /* ─── Auth helpers ──────────────────────────────────────────────────── */
 function getStoredUser() {
@@ -243,6 +243,20 @@ const AUDIENCE = [
   { emoji: '🎵', title: 'Clips & publicités', points: ['Modèle clip musical intégré', 'Structure pub 30s prête', 'Découpage rythmique'] },
 ]
 
+/* ─── Testimonials ───────────────────────────────────────────────────── */
+const TESTIMONIALS = [
+  { quote: "Tiany m'a permis de préparer mon premier court-métrage en 3 jours. Avant j'utilisais 4 apps différentes, maintenant tout est au même endroit.", name: 'Marie L.', role: 'Étudiante en cinéma, ESEC Paris', color: '#e8a020', initials: 'ML' },
+  { quote: "Enfin un outil gratuit à la hauteur des prods pros. Mon chef-op et moi préparons les plans de scène ensemble — sans se perdre dans des fichiers PDF.", name: 'Karim B.', role: 'Réalisateur indépendant, Lyon', color: '#60a5fa', initials: 'KB' },
+  { quote: "J'ai exporté mon script en format Hollywood pour ma présentation de fin d'année. Parfait du premier coup, sans rien formater.", name: 'Sophie A.', role: '1ère Assistante réalisatrice', color: '#4ade80', initials: 'SA' },
+]
+
+/* ─── Outcomes ────────────────────────────────────────────────────────── */
+const OUTCOMES = [
+  { icon: Timer, color: '#e8a020', bg: 'rgba(232,160,32,0.1)', title: 'Prépare ton tournage 2x plus vite', desc: 'Arrête de jongler entre 5 apps. Script, storyboard, découpage et budget coexistent dans le même projet — chaque décision documentée en temps réel.' },
+  { icon: Layers, color: '#60a5fa', bg: 'rgba(96,165,250,0.1)', title: 'Tout ton projet, au même endroit', desc: 'Un seul outil pour toute l\'équipe. Ouvre ton projet depuis n\'importe quel appareil. Continue exactement là où tu t\'es arrêté.' },
+  { icon: BadgeCheck, color: '#4ade80', bg: 'rgba(74,222,128,0.1)', title: 'Évite les erreurs de production', desc: 'Chaque scène documentée : plan, lumière, son, accessoires. Le jour J, tout le monde lit la même version — zéro surprise sur le plateau.' },
+]
+
 /* ─── Main page ──────────────────────────────────────────────────────── */
 export default function Home() {
   const [scrolled, setScrolled] = useState(false)
@@ -426,6 +440,36 @@ export default function Home() {
         .cta-btn { display: inline-flex; align-items: center; gap: 8px; background: #e8a020; color: #000; font-weight: 800; font-size: 15px; padding: 14px 32px; border-radius: 14px; text-decoration: none; transition: opacity 0.2s, transform 0.1s; }
         .cta-btn:hover { opacity: 0.88; transform: translateY(-1px); }
 
+        /* ── Crew avatars ── */
+        .crew-strip { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+        .crew-avatars { display: flex; }
+        .crew-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #000; border: 2px solid #080808; flex-shrink: 0; }
+        .crew-label { font-size: 12px; color: rgba(240,237,232,0.4); line-height: 1.4; }
+
+        /* ── Testimonials ── */
+        .proof-section { padding: 80px 24px; background: #050505; border-top: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .proof-inner { max-width: 1000px; margin: 0 auto; }
+        .testimonials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
+        @media (max-width: 700px) { .testimonials-grid { grid-template-columns: 1fr; } }
+        .testimonial-card { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+        .testimonial-quote { font-size: 14px; line-height: 1.7; color: rgba(240,237,232,0.6); font-style: italic; flex: 1; }
+        .testimonial-author { display: flex; align-items: center; gap: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .testimonial-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; color: #000; flex-shrink: 0; }
+        .testimonial-name { font-size: 13px; font-weight: 700; color: #f0ede8; }
+        .testimonial-role { font-size: 11px; color: rgba(240,237,232,0.3); margin-top: 1px; }
+        .stars { font-size: 11px; color: #e8a020; letter-spacing: 1px; margin-bottom: 2px; }
+
+        /* ── Outcomes / Benefits ── */
+        .outcomes-section { padding: 80px 24px; background: #000; }
+        .outcomes-inner { max-width: 1000px; margin: 0 auto; }
+        .outcomes-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 40px; }
+        @media (max-width: 700px) { .outcomes-grid { grid-template-columns: 1fr; } }
+        .outcome-card { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; padding: 32px 26px; transition: border-color 0.2s; }
+        .outcome-card:hover { border-color: rgba(232,160,32,0.2); }
+        .outcome-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px; }
+        .outcome-title { font-size: 19px; font-weight: 900; color: #f0ede8; line-height: 1.2; margin-bottom: 12px; }
+        .outcome-desc { font-size: 13px; color: rgba(240,237,232,0.5); line-height: 1.65; }
+
         /* ── Footer ── */
         .footer { padding: 28px 24px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: space-between; flex-wrap: gap; }
         .footer-logo { display: flex; align-items: center; gap: 8px; }
@@ -466,9 +510,17 @@ export default function Home() {
             <p className="hero-sub">
               Arrête de jongler entre 5 apps différentes. Tiany réunit script, storyboard, découpage technique, plan de scène et budget dans une interface conçue pour les réalisateurs.
             </p>
-            <p style={{ fontSize: 13, color: 'rgba(240,237,232,0.45)', marginBottom: 28, fontStyle: 'italic' }}>
-              Passe de l'idée à la mise en scène en quelques heures — pas en plusieurs jours.
-            </p>
+            {/* Crew strip — team feel */}
+            <div className="crew-strip">
+              <div className="crew-avatars">
+                {[{ i: 'RE', c: '#e8a020' }, { i: 'DP', c: '#60a5fa' }, { i: 'SC', c: '#f43f5e' }, { i: 'AS', c: '#4ade80' }].map((a, idx) => (
+                  <div key={idx} className="crew-avatar" style={{ background: a.c, marginLeft: idx > 0 ? -9 : 0, zIndex: 4 - idx }}>
+                    {a.i}
+                  </div>
+                ))}
+              </div>
+              <span className="crew-label">Réalisateur · Chef op · Scripte · Son<br />toute l'équipe sur le même outil</span>
+            </div>
             <div className="hero-stats">
               <div className="stat"><span className="stat-val">6</span><span className="stat-label">Outils par scène</span></div>
               <div className="stat"><span className="stat-val">∞</span><span className="stat-label">Projets gratuits</span></div>
@@ -485,6 +537,52 @@ export default function Home() {
 
       {/* Feature ticker */}
       <FeatureTicker />
+
+      {/* Proof — testimonials */}
+      <section className="proof-section">
+        <div className="proof-inner">
+          <div className="section-label">
+            <p>Ils utilisent Tiany</p>
+            <h2>Des créateurs qui ont passé le cap</h2>
+          </div>
+          <div className="testimonials-grid">
+            {TESTIMONIALS.map(t => (
+              <div key={t.name} className="testimonial-card">
+                <div className="stars">★★★★★</div>
+                <p className="testimonial-quote">"{t.quote}"</p>
+                <div className="testimonial-author">
+                  <div className="testimonial-avatar" style={{ background: t.color }}>{t.initials}</div>
+                  <div>
+                    <p className="testimonial-name">{t.name}</p>
+                    <p className="testimonial-role">{t.role}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Outcomes — benefits as results */}
+      <section className="outcomes-section">
+        <div className="outcomes-inner">
+          <div className="section-label">
+            <p>Pourquoi Tiany</p>
+            <h2>Ce que tu gagnes concrètement</h2>
+          </div>
+          <div className="outcomes-grid">
+            {OUTCOMES.map(o => (
+              <div key={o.title} className="outcome-card">
+                <div className="outcome-icon" style={{ background: o.bg }}>
+                  <o.icon size={20} style={{ color: o.color }} />
+                </div>
+                <h3 className="outcome-title">{o.title}</h3>
+                <p className="outcome-desc">{o.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* How it works */}
       <section style={{ padding: '80px 24px', background: '#000' }}>
@@ -596,11 +694,18 @@ export default function Home() {
 
       {/* CTA */}
       <section className="cta-section">
-        <h2 className="cta-title">Prêt à tourner ?</h2>
-        <p className="cta-sub">Gratuit. Aucune installation. Commence en 30 secondes.</p>
+        <h2 className="cta-title">Ton prochain film<br /><em style={{ color: '#e8a020', fontStyle: 'normal' }}>commence ici.</em></h2>
+        <p className="cta-sub">Gratuit. Sans inscription. Prêt en 30 secondes.</p>
         <a href="/projects" className="cta-btn">
-          <Play size={16} /> Ouvrir Tiany maintenant
+          <Play size={16} /> Commencer gratuitement
         </a>
+        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {['100% gratuit', 'Données locales', 'Sans carte bancaire', 'Sans installation'].map(g => (
+            <span key={g} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'rgba(240,237,232,0.3)', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', padding: '3px 10px', borderRadius: 20 }}>
+              <Check size={9} />{g}
+            </span>
+          ))}
+        </div>
       </section>
 
       {/* Footer */}

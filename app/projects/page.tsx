@@ -2,7 +2,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Film, Plus, Trash2, Clock, Layers, ChevronRight, Edit3, X, Clapperboard, Music, FileVideo, Newspaper } from 'lucide-react'
+import { Film, Plus, Trash2, Clock, Layers, ChevronRight, Edit3, X, Clapperboard, Music, FileVideo, Newspaper, Lock } from 'lucide-react'
+import UpgradeModal from '../../components/UpgradeModal'
+import { isPro, FREE_PROJECT_LIMIT } from '../../lib/pro'
 import { getUserProjects, deleteProject as deleteProjectFromDB, updateProject } from '../../lib/db/projects'
 import { getLocalUserId } from '../../lib/db/users'
 import { ensureSession, isSupabaseReady } from '../../lib/supabase'
@@ -100,6 +102,15 @@ export default function ProjectsPage() {
   const [renameVal, setRenameVal] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
   const [search, setSearch] = useState('')
+  const [showUpgrade, setShowUpgrade] = useState(false)
+
+  const handleNewProject = () => {
+    if (!isPro() && projects.length >= FREE_PROJECT_LIMIT) {
+      setShowUpgrade(true)
+    } else {
+      setShowTemplates(true)
+    }
+  }
 
   useEffect(() => {
     // Load local index immediately (instant)
@@ -202,7 +213,7 @@ export default function ProjectsPage() {
           </div>
           <span className="font-black text-base">tiany</span>
         </Link>
-        <button onClick={() => setShowTemplates(true)}
+        <button onClick={handleNewProject}
           className="flex items-center gap-2 text-sm font-bold px-4 py-2 rounded-xl transition-all hover:opacity-90"
           style={{ background: '#e8a020', color: '#000' }}>
           <Plus size={14} /> Nouveau projet
@@ -222,9 +233,19 @@ export default function ProjectsPage() {
             </div>
           )}
         </div>
-        <p className="text-sm mb-8" style={{ color: 'rgba(255,255,255,0.35)' }}>
-          {projects.length === 0 ? 'Aucun projet pour le moment' : `${projects.length} projet${projects.length > 1 ? 's' : ''}`}
-        </p>
+        <div className="flex items-center gap-3 mb-8">
+          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            {projects.length === 0 ? 'Aucun projet pour le moment' : `${projects.length} projet${projects.length > 1 ? 's' : ''}`}
+          </p>
+          {!isPro() && projects.length > 0 && (
+            <button onClick={() => setShowUpgrade(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg transition-opacity hover:opacity-80"
+              style={{ background: projects.length >= FREE_PROJECT_LIMIT ? 'rgba(248,113,113,0.1)' : 'rgba(232,160,32,0.08)', color: projects.length >= FREE_PROJECT_LIMIT ? '#f87171' : 'rgba(232,160,32,0.7)', border: `1px solid ${projects.length >= FREE_PROJECT_LIMIT ? 'rgba(248,113,113,0.2)' : 'rgba(232,160,32,0.15)'}` }}>
+              <Lock size={9} />
+              {projects.length >= FREE_PROJECT_LIMIT ? `Limite atteinte (${FREE_PROJECT_LIMIT}/${FREE_PROJECT_LIMIT})` : `${projects.length}/${FREE_PROJECT_LIMIT} projets gratuits`}
+            </button>
+          )}
+        </div>
 
         {projects.length === 0 ? (
           <button onClick={() => setShowTemplates(true)}
@@ -240,10 +261,11 @@ export default function ProjectsPage() {
           </button>
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
-            <button onClick={() => setShowTemplates(true)}
+            <button onClick={handleNewProject}
               className="flex items-center justify-center gap-2 py-10 rounded-2xl transition-all hover:bg-white/5 font-semibold text-sm"
-              style={{ border: '1px dashed rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.3)' }}>
-              <Plus size={16} /> Nouveau projet
+              style={{ border: `1px dashed ${!isPro() && projects.length >= FREE_PROJECT_LIMIT ? 'rgba(248,113,113,0.25)' : 'rgba(255,255,255,0.1)'}`, color: !isPro() && projects.length >= FREE_PROJECT_LIMIT ? 'rgba(248,113,113,0.5)' : 'rgba(255,255,255,0.3)' }}>
+              {!isPro() && projects.length >= FREE_PROJECT_LIMIT ? <Lock size={16} /> : <Plus size={16} />}
+              {!isPro() && projects.length >= FREE_PROJECT_LIMIT ? 'Passer au Pro pour continuer' : 'Nouveau projet'}
             </button>
 
             {projects.filter(p => !search || p.title.toLowerCase().includes(search.toLowerCase())).map(p => (
@@ -318,6 +340,14 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showUpgrade && (
+        <UpgradeModal
+          onClose={() => setShowUpgrade(false)}
+          reason={projects.length >= FREE_PROJECT_LIMIT ? `Limite de ${FREE_PROJECT_LIMIT} projets atteinte sur le plan gratuit` : undefined}
+          theme="dark"
+        />
       )}
     </div>
   )

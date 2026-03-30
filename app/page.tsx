@@ -863,17 +863,17 @@ export default function Home() {
               </div>
               <div className="pricing-price">0€</div>
               <div className="pricing-price-sub">puis puis 8€/mois</div>
-              <h3 className="pricing-name">Plan Essai</h3>
-              <p className="pricing-desc">Toutes les fonctionnalités débloquées, sans limite. Sans carte bancaire requise.</p>
+              <h3 className="pricing-name">Plan Gratuit</h3>
+              <p className="pricing-desc">Pour découvrir Tiany. 2 projets, toutes les fonctionnalités de base. Sans carte bancaire.</p>
               <div className="pricing-features">
                 {[
+                  '2 projets maximum',
                   'Script · Storyboard · Floor Plan',
                   'Découpage technique & Son & Lumière',
                   'Budget avec suivi et catégories',
                   'Mode tournage live avec chrono',
-                  'Export PDF Hollywood & Fountain',
-                  'Collaboration jusqu\'à 5 membres',
-                  'Sync cloud multi-appareils',
+                  'Export .txt',
+                  'Données locales — tes fichiers t\'appartiennent',
                 ].map(f => (
                   <div key={f} className="pricing-feature">
                     <Check size={13} style={{ color: '#e8a020', flexShrink: 0 }} />{f}
@@ -890,12 +890,12 @@ export default function Home() {
               </div>
               <div className="pricing-price" style={{ color: 'rgba(240,237,232,0.35)' }}>Pro</div>
               <div className="pricing-price-sub">Tarif à annoncer</div>
-              <h3 className="pricing-name" style={{ color: 'rgba(240,237,232,0.5)' }}>Plan Pro</h3>
+              <h3 className="pricing-name" style={{ color: 'rgba(240,237,232,0.5)' }}>Plan Pro — 8€/mois</h3>
               <p className="pricing-desc">Pour les équipes, les productions régulières et les projets ambitieux.</p>
               <div className="pricing-features" style={{ opacity: 0.45 }}>
                 {[
-                  'Tout le Plan Essai, pour toujours',
-                  'Projets et membres illimités',
+                  'Tout le Plan Gratuit, sans limites',
+                  'Projets illimités',
                   'Génération IA de script (Claude)',
                   'Export storyboard haute résolution',
                   'Rôles et permissions avancés',

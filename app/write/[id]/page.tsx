@@ -12,6 +12,8 @@ import { useRealtimeComments } from '../../../lib/hooks/useRealtimeComments'
 import { getMemberRole } from '../../../lib/db/members'
 import type { MembersPanelProps } from '../../../components/MembersPanel'
 import type { default as MoodboardPanelType } from '../../../components/MoodboardPanel'
+import UpgradeModal from '../../../components/UpgradeModal'
+import { isPro } from '../../../lib/pro'
 
 const MembersPanel = dynamic<MembersPanelProps>(() => import('../../../components/MembersPanel'), { ssr: false })
 const MoodboardPanel = dynamic<React.ComponentProps<typeof MoodboardPanelType>>(() => import('../../../components/MoodboardPanel'), { ssr: false })
@@ -2964,6 +2966,8 @@ export default function WritePage() {
   const [memberRole, setMemberRole] = useState<string | null>(null)
   const [guidanceStep, setGuidanceStep] = useState<number | 'done' | null>(null)
   const [wowToast, setWowToast] = useState(false)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [upgradeReason, setUpgradeReason] = useState<string | undefined>()
   const [shootingOrder, setShootingOrder] = useState<string[]>([])
   const [shootingEntries, setShootingEntries] = useState<ShootingEntry[]>([])
   const [showTournage, setShowTournage] = useState(false)
@@ -3299,6 +3303,7 @@ export default function WritePage() {
   }
 
   const handleExportFountain = () => {
+    if (!isPro()) { setUpgradeReason('Export Fountain réservé au plan Pro'); setShowUpgrade(true); return }
     const now = new Date()
     const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
     let content = `Title: ${title}\nAuthor: \nDraft date: ${dateStr}\n\n===\n\n`
@@ -3321,6 +3326,7 @@ export default function WritePage() {
   }
 
   const handleExportPDF = async () => {
+    if (!isPro()) { setShowExportMenu(false); setUpgradeReason('Export PDF Hollywood réservé au plan Pro'); setShowUpgrade(true); return }
     setShowExportMenu(false)
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' })
@@ -4266,6 +4272,15 @@ export default function WritePage() {
           />
         )
       })()}
+
+      {/* ── Upgrade modal ── */}
+      {showUpgrade && (
+        <UpgradeModal
+          onClose={() => setShowUpgrade(false)}
+          reason={upgradeReason}
+          theme={theme}
+        />
+      )}
 
       {/* ── First run onboarding ── */}
       {showOnboarding && (

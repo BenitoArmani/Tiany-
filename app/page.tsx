@@ -334,7 +334,7 @@ export default function Home() {
         .feature-point { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: rgba(240,237,232,0.6); line-height: 1.5; }
         .feature-point-icon { flex-shrink: 0; width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
         .feature-visual { border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); background: #0a0a0a; }
-        @media (max-width: 860px) { .feature-visual-order-first { order: -1; } }
+        @media (max-width: 860px) { .feature-visual, .feature-visual-order-first { order: -1; } }
 
         /* ── App preview mockup ── */
         .preview-section { padding: 0 24px 80px; background: #000; }
@@ -430,6 +430,55 @@ export default function Home() {
         .cta-sub { font-size: 16px; color: rgba(240,237,232,0.45); margin-bottom: 36px; }
         .cta-btn { display: inline-flex; align-items: center; gap: 8px; background: #e8a020; color: #000; font-weight: 800; font-size: 15px; padding: 14px 32px; border-radius: 14px; text-decoration: none; transition: opacity 0.2s, transform 0.1s; }
         .cta-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+
+        /* ── Full mobile responsive ── */
+        @media (max-width: 640px) {
+          .nav-link { display: none; }
+          .nav-cta { font-size: 12px; padding: 6px 12px; }
+          .nav-logo-text { font-size: 15px; }
+
+          .hero { padding: 72px 16px 40px; }
+          .hero-photo-layer { width: 100%; opacity: 0.18; }
+          .hero-inner { gap: 28px; padding-top: 24px; }
+          .hero-sub { font-size: 14px; }
+          .crew-label { font-size: 11px; }
+
+          .proof-bar { padding: 0; }
+          .proof-bar-inner { display: grid !important; grid-template-columns: 1fr 1fr; }
+          .proof-stat { padding: 16px 10px; border-left: none !important; }
+          .proof-stat:nth-child(2n) { border-left: 1px solid rgba(255,255,255,0.07) !important; }
+          .proof-stat:nth-child(n+3) { border-top: 1px solid rgba(255,255,255,0.07); }
+          .proof-stat-val { font-size: 22px !important; }
+
+          .feature-section { padding: 52px 16px !important; }
+          .feature-visual { order: -1; }
+          .feature-h2 { font-size: 24px; }
+          .feature-desc { font-size: 14px; }
+
+          .proof-section { padding: 56px 16px; }
+          .testimonials-grid { gap: 14px; }
+
+          .preview-section { padding: 0 16px 52px !important; }
+          .preview-section > div { padding-top: 52px; }
+
+          .audience-section { padding: 52px 16px; }
+
+          .pricing-section { padding: 56px 16px; }
+          .pricing-card { padding: 24px 20px; }
+          .pricing-price { font-size: 42px; }
+
+          .cta-section { padding: 56px 16px 80px; }
+          .cta-title { font-size: 28px; }
+
+          .section-label h2 { font-size: 24px; }
+          .section-label { margin-bottom: 32px; }
+        }
+
+        @media (max-width: 480px) {
+          .hero-h1 { font-size: 32px !important; }
+          .feature-inner { gap: 24px; }
+          .login-card-inner { padding: 20px; }
+        }
 
         /* ── Footer ── */
         .footer { padding: 28px 24px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
@@ -733,7 +782,8 @@ export default function Home() {
             <p>Comparaison</p>
             <h2>Pourquoi pas StudioBinder ?</h2>
           </div>
-          <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+          <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', minWidth: 520 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', background: '#0d0d0d', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
               <div style={{ padding: '12px 20px', fontSize: 11, color: 'rgba(240,237,232,0.3)', fontWeight: 600 }}>Fonctionnalité</div>
               {[
@@ -765,6 +815,8 @@ export default function Home() {
                 ))}
               </div>
             ))}
+          </div>
+          </div>
           </div>
           <p style={{ textAlign: 'center', marginTop: 16, fontSize: 11, color: 'rgba(240,237,232,0.25)' }}>* Comparaison indicative — données 2026</p>
         </div>
@@ -810,7 +862,7 @@ export default function Home() {
                 ✦ 14 jours gratuits
               </div>
               <div className="pricing-price">0€</div>
-              <div className="pricing-price-sub">puis à partir de 9€/mois</div>
+              <div className="pricing-price-sub">puis puis 8€/mois</div>
               <h3 className="pricing-name">Plan Essai</h3>
               <p className="pricing-desc">Toutes les fonctionnalités débloquées, sans limite. Sans carte bancaire requise.</p>
               <div className="pricing-features">
